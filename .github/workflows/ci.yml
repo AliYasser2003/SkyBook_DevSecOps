@@ -177,6 +177,7 @@ jobs:
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://localhost:5000 \
+            -I \
             -r skybook-zap-report.html \
             -J skybook-zap-report.json
       - name: Upload ZAP reports
