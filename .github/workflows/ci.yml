@@ -1,3 +1,4 @@
+
 name: SkyBook CI
 
 on:
@@ -10,6 +11,9 @@ permissions:
   contents: read
 
 jobs:
+  # ==========================================
+  # 1. Backend Tests and Security
+  # ==========================================
   backend-ci:
     name: Backend Tests and Security
     runs-on: ubuntu-latest
@@ -47,6 +51,7 @@ jobs:
       - name: Build backend Docker image
         working-directory: .
         run: docker build -t skybook-backend:${{ github.sha }} ./backend
+
       - name: Scan filesystem with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -56,6 +61,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -79,7 +85,9 @@ jobs:
           name: skybook-sbom
           path: skybook-sbom.cdx.json
 
-
+  # ==========================================
+  # 2. Secret Scanning - Gitleaks
+  # ==========================================
   secret-scanning:
     name: Gitleaks Secret Scanning
     runs-on: ubuntu-latest
@@ -95,6 +103,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ==========================================
+  # 3. SAST - Semgrep
+  # ==========================================
   sast:
     name: SAST - Semgrep
     runs-on: ubuntu-latest
@@ -108,40 +119,39 @@ jobs:
         with:
           config: p/javascript
 
+  # ==========================================
+  # 4. DAST - OWASP ZAP
+  # ==========================================
   dast-zap:
     name: DAST - OWASP ZAP
     runs-on: ubuntu-latest
 
+    # Temporary CI-only credentials.
+    # Never use these values in production.
+    env:
+      MYSQL_ROOT_PASSWORD: ci-only-root-password-${{ github.run_id }}
+      DB_PASSWORD: ci-only-db-password-${{ github.run_id }}
+      JWT_SECRET: ci-only-jwt-secret-${{ github.run_id }}-not-for-production
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Validate DAST secrets
-        env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+      - name: Validate DAST environment
         run: |
-          test -n "$MYSQL_ROOT_PASSWORD" || { echo "::error::MYSQL_ROOT_PASSWORD is missing"; exit 1; }
-          test -n "$DB_PASSWORD" || { echo "::error::DB_PASSWORD is missing"; exit 1; }
-          test -n "$JWT_SECRET" || { echo "::error::JWT_SECRET is missing"; exit 1; }
-          echo "All required DAST secrets are available."
+          test -n "$MYSQL_ROOT_PASSWORD"
+          test -n "$DB_PASSWORD"
+          test -n "$JWT_SECRET"
+          echo "All DAST environment variables are available."
 
       - name: Start SkyBook backend
-        run: |
-          docker compose up -d db mailpit backend
-        env:
-          MYSQL_ROOT_PASSWORD: ci-only-root-password-${{ github.run_id }}
-          DB_PASSWORD: ci-only-db-password-${{ github.run_id }}
-          JWT_SECRET: ci-only-jwt-secret-${{ github.run_id }}-not-for-production
+        run: docker compose up -d db mailpit backend
+
       - name: Debug MySQL startup
         if: failure()
         run: |
           docker compose ps -a
           docker compose logs db
-        env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Wait for backend health
         run: |
@@ -151,6 +161,7 @@ jobs:
             fi
             sleep 5
           done
+
           echo "Backend failed to become healthy"
           docker compose logs backend db
           exit 1
@@ -158,6 +169,7 @@ jobs:
       - name: Run OWASP ZAP baseline scan
         run: |
           mkdir -p zap-reports
+
           docker run --rm \
             --network host \
             -v "$PWD/zap-reports:/zap/wrk/:rw" \
@@ -179,12 +191,14 @@ jobs:
         if: always()
         run: docker compose down
 
-
+  # ==========================================
+  # 5. AWS OIDC Authentication
+  # ==========================================
   aws-oidc-auth:
     name: AWS OIDC Authentication
     runs-on: ubuntu-latest
 
-    # Only authenticate on pushes to main, not pull requests.
+    # Only authenticate on pushes to main.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     permissions:
