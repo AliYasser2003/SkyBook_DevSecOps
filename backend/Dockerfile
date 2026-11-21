@@ -1,7 +1,9 @@
-
 FROM node:22-alpine
 
 WORKDIR /app
+
+# Update npm to a version containing patched dependencies
+RUN npm install -g npm@12.2.3
 
 # Install production dependencies
 COPY package*.json ./
