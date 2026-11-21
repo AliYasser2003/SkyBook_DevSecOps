@@ -119,6 +119,11 @@ jobs:
       - name: Start SkyBook backend
         run: |
           docker compose up -d db mailpit backend
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
       - name: Debug MySQL startup
         if: failure()
         run: |
