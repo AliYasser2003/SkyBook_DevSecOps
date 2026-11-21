@@ -36,3 +36,12 @@ serverless/src/handler.py.bak
 # Temporary terminal output files
 /cloudformation deploy \/
 wafv2 get-web-acl \
+
+# Local database backups
+/backups/
+
+# Node.js dependencies
+node_modules/
+
+# Frontend build output
+/frontend/dist/
