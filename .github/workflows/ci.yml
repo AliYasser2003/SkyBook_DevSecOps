@@ -169,6 +169,7 @@ jobs:
       - name: Run OWASP ZAP baseline scan
         run: |
           mkdir -p zap-reports
+          chmod 777 zap-reports
 
           docker run --rm \
             --network host \
@@ -178,7 +179,6 @@ jobs:
             -t http://localhost:5000 \
             -r skybook-zap-report.html \
             -J skybook-zap-report.json
-
       - name: Upload ZAP reports
         if: always()
         uses: actions/upload-artifact@v4
