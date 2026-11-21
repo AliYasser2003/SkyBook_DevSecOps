@@ -48,7 +48,7 @@ jobs:
         working-directory: .
         run: docker build -t skybook-backend:${{ github.sha }} ./backend
       - name: Scan filesystem with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -57,7 +57,7 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
       - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: skybook-backend:${{ github.sha }}
           format: table
@@ -66,7 +66,7 @@ jobs:
           exit-code: '1'
 
       - name: Generate Software Bill of Materials
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: skybook-backend:${{ github.sha }}
