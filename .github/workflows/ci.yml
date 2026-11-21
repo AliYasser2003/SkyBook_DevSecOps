@@ -1,9 +1,4 @@
-
-name: SecurePay CI
-
-permissions:
-  contents: read
-  id-token: write
+name: SkyBook CI
 
 on:
   push:
@@ -11,9 +6,82 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  security-and-tests:
-    name: Tests and Security Scans
+  backend-ci:
+    name: Backend Tests and Security
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm test
+
+      - name: Check JavaScript syntax
+        working-directory: .
+        run: |
+          find backend/src -type f -name "*.js" -print0 |
+          xargs -0 -r -n1 node --check
+
+      - name: Run dependency vulnerability audit
+        run: npm audit --audit-level=high
+
+      - name: Build backend Docker image
+        working-directory: .
+        run: docker build -t skybook-backend:${{ github.sha }} ./backend
+      - name: Scan filesystem with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: skybook-backend:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Generate Software Bill of Materials
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: skybook-backend:${{ github.sha }}
+          format: cyclonedx
+          output: skybook-sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skybook-sbom
+          path: skybook-sbom.cdx.json
+
+
+  secret-scanning:
+    name: Gitleaks Secret Scanning
     runs-on: ubuntu-latest
 
     steps:
@@ -22,107 +90,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.txt
-
-      - name: Install dependencies and scanners
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install bandit pip-audit
-
-      - name: Run automated tests
-        run: python -m pytest -v
-
-      - name: Run Bandit SAST
-        run: bandit -r app -ll
-
-      - name: Run pip-audit SCA
-        run: pip-audit -r requirements.txt
-
-      - name: Run Gitleaks secret scan
+      - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Start SecurePay API for DAST
-        run: |
-          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/securepay-api.log 2>&1 &
-          echo $! > /tmp/securepay-api.pid
-
-          for i in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8000/health; then
-              echo "SecurePay API is ready"
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "SecurePay API failed to start"
-          cat /tmp/securepay-api.log
-          exit 1
-
-    
-      - name: Run OWASP ZAP DAST
-        run: |
-          docker run --rm --network host \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-            -t http://127.0.0.1:8000 \
-            -m 1 \
-            -I
-
-  artifact-signing:
-    name: Sign and Verify Build Artifact
-    needs: security-and-tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  sast:
+    name: SAST - Semgrep
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
         with:
-          persist-credentials: false
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.0
-
-      - name: Package source code
-        run: |
-          tar --exclude='.git' \
-              --exclude='.venv' \
-              --exclude='__pycache__' \
-              --exclude='.pytest_cache' \
-              --exclude='reports' \
-              -czf securepay-source.tar.gz \
-              app tests docs .github requirements.txt .gitignore
-
-      - name: Sign build artifact
-        run: |
-          cosign sign-blob securepay-source.tar.gz \
-            --bundle securepay-source.sigstore.json \
-            --yes
-
-      - name: Verify artifact signature
-        run: |
-          cosign verify-blob securepay-source.tar.gz \
-            --bundle securepay-source.sigstore.json \
-            --certificate-identity \
-            "https://github.com/AliYasser2003/SecurePay_Depi_Project/.github/workflows/ci.yml@refs/heads/main" \
-            --certificate-oidc-issuer \
-            "https://token.actions.githubusercontent.com"
+          config: p/javascript
 
   aws-oidc-auth:
-    name: Verify AWS OIDC Authentication
+    name: AWS OIDC Authentication
     runs-on: ubuntu-latest
+
+    # Only authenticate on pushes to main, not pull requests.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     permissions:
@@ -130,21 +120,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Diagnose GitHub OIDC claims
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const token = await core.getIDToken('sts.amazonaws.com');
-            const payload = JSON.parse(
-              Buffer.from(token.split('.')[1], 'base64url').toString()
-            );
-
-            console.log('OIDC issuer:', payload.iss);
-            console.log('OIDC audience:', JSON.stringify(payload.aud));
-            console.log('OIDC subject:', payload.sub);
-            console.log('OIDC repository:', payload.repository);
-            console.log('OIDC ref:', payload.ref);
-
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
