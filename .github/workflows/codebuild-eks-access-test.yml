@@ -38,16 +38,33 @@ jobs:
             --region us-east-1 \
             --name skybook-eks
 
-      - name: Verify least-privilege RBAC
+            - name: Verify least-privilege RBAC
+        shell: bash
         run: |
-          echo "Checking cluster-level node access (expected: no)"
-          kubectl auth can-i list nodes
+          set -euo pipefail
 
-          echo "Checking namespace deployment access (expected: yes)"
-          kubectl auth can-i get deployments -n skybook
+          echo "1. Checking cluster-level node access (expected: no)"
+          NODE_ACCESS="$(kubectl auth can-i list nodes)"
+          echo "Node access: $NODE_ACCESS"
 
-          echo "Reading SkyBook deployments"
+          if [ "$NODE_ACCESS" != "no" ]; then
+            echo "ERROR: Expected cluster-level node access to be denied"
+            exit 1
+          fi
+
+          echo "2. Checking namespace deployment access (expected: yes)"
+          DEPLOYMENT_ACCESS="$(kubectl auth can-i get deployments -n skybook)"
+          echo "Deployment access: $DEPLOYMENT_ACCESS"
+
+          if [ "$DEPLOYMENT_ACCESS" != "yes" ]; then
+            echo "ERROR: Expected deployment access in skybook"
+            exit 1
+          fi
+
+          echo "3. Reading SkyBook deployments"
           kubectl get deployments -n skybook
 
-          echo "Reading SkyBook services"
+          echo "4. Reading SkyBook services"
           kubectl get services -n skybook
+
+          echo "RBAC validation completed successfully"
