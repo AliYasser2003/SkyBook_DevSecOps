@@ -1,0 +1,45 @@
+name: CodeBuild OIDC and EKS Access Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  eks-access:
+    name: Authenticate and access private EKS
+    runs-on:
+      - codebuild-skybook-github-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      - name: Install kubectl
+        run: |
+          curl -fsSLO https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Configure EKS access
+        run: |
+          aws eks update-kubeconfig \
+            --region us-east-1 \
+            --name skybook-eks
+
+      - name: Verify private EKS connectivity and permissions
+        run: |
+          kubectl get nodes
+          kubectl get deployments -n skybook
+          kubectl auth can-i get deployments -n skybook
