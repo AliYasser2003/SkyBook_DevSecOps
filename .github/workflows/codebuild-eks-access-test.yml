@@ -38,8 +38,16 @@ jobs:
             --region us-east-1 \
             --name skybook-eks
 
-      - name: Verify private EKS connectivity and permissions
+      - name: Verify least-privilege RBAC
         run: |
-          kubectl get nodes
-          kubectl get deployments -n skybook
+          echo "Checking cluster-level node access (expected: no)"
+          kubectl auth can-i list nodes
+
+          echo "Checking namespace deployment access (expected: yes)"
           kubectl auth can-i get deployments -n skybook
+
+          echo "Reading SkyBook deployments"
+          kubectl get deployments -n skybook
+
+          echo "Reading SkyBook services"
+          kubectl get services -n skybook
