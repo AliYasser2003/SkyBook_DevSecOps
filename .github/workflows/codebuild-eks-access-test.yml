@@ -22,8 +22,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Verify AWS identity
-        run: |
-          aws sts get-caller-identity
+        run: aws sts get-caller-identity
 
       - name: Install kubectl
         run: |
@@ -38,17 +37,17 @@ jobs:
             --region us-east-1 \
             --name skybook-eks
 
-            - name: Verify least-privilege RBAC
+      - name: Verify least-privilege RBAC
         shell: bash
         run: |
           set -euo pipefail
 
           echo "1. Checking cluster-level node access (expected: no)"
-          NODE_ACCESS="$(kubectl auth can-i list nodes)"
+          NODE_ACCESS="$(kubectl auth can-i list nodes || true)"
           echo "Node access: $NODE_ACCESS"
 
           if [ "$NODE_ACCESS" != "no" ]; then
-            echo "ERROR: Expected cluster-level node access to be denied"
+            echo "ERROR: Expected node access to be denied"
             exit 1
           fi
 
