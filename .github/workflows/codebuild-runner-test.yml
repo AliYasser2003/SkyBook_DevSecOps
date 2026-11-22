@@ -16,17 +16,19 @@ jobs:
     steps:
       - name: Inspect runner
         run: |
-          echo "Runner hostname:"
-          hostname
           echo "Operating system:"
           uname -a
+          echo "Current directory:"
+          pwd
+          echo "Runner environment:"
+          cat /etc/os-release || true
 
       - name: Test GitHub connectivity
         run: |
           curl -fsSI --max-time 20 https://github.com
           echo "GitHub connectivity: OK"
 
-      - name: Test AWS connectivity
+      - name: Test AWS STS connectivity
         run: |
           curl -fsSI --max-time 20 https://sts.us-east-1.amazonaws.com
           echo "AWS STS endpoint connectivity: OK"
