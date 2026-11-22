@@ -1,0 +1,32 @@
+name: CodeBuild Runner Connectivity Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-test:
+    name: Test private CodeBuild runner
+    runs-on:
+      - codebuild-skybook-github-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Inspect runner
+        run: |
+          echo "Runner hostname:"
+          hostname
+          echo "Operating system:"
+          uname -a
+
+      - name: Test GitHub connectivity
+        run: |
+          curl -fsSI --max-time 20 https://github.com
+          echo "GitHub connectivity: OK"
+
+      - name: Test AWS connectivity
+        run: |
+          curl -fsSI --max-time 20 https://sts.us-east-1.amazonaws.com
+          echo "AWS STS endpoint connectivity: OK"
