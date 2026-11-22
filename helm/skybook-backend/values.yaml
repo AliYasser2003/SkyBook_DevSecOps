@@ -1,0 +1,47 @@
+replicaCount: 1
+
+image:
+  repository: 107759015479.dkr.ecr.us-east-1.amazonaws.com/skybook
+  tag: dev
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5000
+
+containerPort: 5000
+
+frontendOrigin: "http://localhost:5173"
+
+existingSecret:
+  name: skybook-backend-secrets
+
+config:
+  nodeEnv: production
+  emailProvider: ses
+  awsRegion: us-east-1
+  sesFromEmail: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  startup:
+    periodSeconds: 10
+    failureThreshold: 30
+  readiness:
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    periodSeconds: 20
+    failureThreshold: 3
+
+serviceAccount:
+  create: false
+  name: skybook-backend
+  automount: false
