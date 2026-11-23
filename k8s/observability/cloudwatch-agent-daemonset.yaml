@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cloudwatch-agent
+  namespace: amazon-cloudwatch
+spec:
+  selector:
+    matchLabels:
+      app: cloudwatch-agent
+  template:
+    metadata:
+      labels:
+        app: cloudwatch-agent
+    spec:
+      serviceAccountName: cloudwatch-agent
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: cloudwatch-agent
+          image: public.ecr.aws/cloudwatch-agent/cloudwatch-agent:latest
+          imagePullPolicy: Always
+          args:
+            - -config
+            - /etc/cwagentconfig/amazon-cloudwatch-agent.json
+          env:
+            - name: AWS_REGION
+              value: us-east-1
+            - name: HOST_PROC
+              value: /rootfs/proc
+            - name: HOST_SYS
+              value: /rootfs/sys
+            - name: HOST_ETC
+              value: /rootfs/etc
+            - name: HOST_VAR
+              value: /rootfs/var
+            - name: HOST_RUN
+              value: /rootfs/run
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cwagentconfig
+              readOnly: true
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+            - name: agent-state
+              mountPath: /opt/aws/amazon-cloudwatch-agent/var
+      volumes:
+        - name: config
+          configMap:
+            name: cloudwatch-agent-config
+        - name: rootfs
+          hostPath:
+            path: /
+            type: Directory
+        - name: agent-state
+          emptyDir: {}

@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skybook-db-schema-init
+  namespace: skybook
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: skybook-db-schema-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql-client
+          image: mysql:8.4
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -eu
+
+              echo "Waiting for RDS MySQL..."
+
+              until mysqladmin ping \
+                --host="$DB_HOST" \
+                --port="$DB_PORT" \
+                --user="$DB_USER" \
+                --silent; do
+                sleep 5
+              done
+
+              echo "RDS is reachable."
+              echo "Initializing SkyBook database schema..."
+
+              export MYSQL_PWD="$DB_PASSWORD"
+
+              mysql \
+                --host="$DB_HOST" \
+                --port="$DB_PORT" \
+                --user="$DB_USER" \
+                "$DB_NAME" < /schema/schema.sql
+
+              echo "Schema initialization completed."
+              echo "Verifying database tables and sample flights..."
+
+              mysql \
+                --host="$DB_HOST" \
+                --port="$DB_PORT" \
+                --user="$DB_USER" \
+                "$DB_NAME" \
+                -e "
+                  SHOW TABLES;
+                  SELECT COUNT(*) AS sample_flights FROM flights;
+                  SELECT COUNT(*) AS users FROM users;
+                  SELECT COUNT(*) AS bookings FROM bookings;
+                  SELECT COUNT(*) AS passengers FROM passengers;
+                "
+
+              unset MYSQL_PWD
+
+          envFrom:
+            - secretRef:
+                name: skybook-backend-secrets
+
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+
+      volumes:
+        - name: schema
+          configMap:
+            name: skybook-db-schema

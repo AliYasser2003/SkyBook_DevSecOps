@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skybook-db-verify
+  namespace: skybook
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql-verify
+          image: mysql:8.4
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              export MYSQL_PWD="$DB_PASSWORD"
+
+              mysql -h "$DB_HOST" -P "$DB_PORT" \
+                -u "$DB_USER" "$DB_NAME" -e "
+                  SHOW TABLES;
+                  SHOW COLUMNS FROM bookings;
+                  SHOW COLUMNS FROM payments;
+                  SHOW COLUMNS FROM flight_seats;
+                  SHOW COLUMNS FROM payment_transactions;
+                "
+          envFrom:
+            - secretRef:
+                name: skybook-backend-secrets

@@ -1,0 +1,26 @@
+serviceAccount:
+  create: true
+  name: aws-for-fluent-bit
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::107759015479:role/SkyBookFluentBitRole
+
+filter:
+  enabled: true
+  match: "kube.*"
+
+additionalFilters: |
+  [FILTER]
+      Name grep
+      Match kube.*
+      Regex $kubernetes['namespace_name'] ^skybook$
+
+cloudWatch:
+  enabled: false
+
+cloudWatchLogs:
+  enabled: true
+  match: "kube.*"
+  region: us-east-1
+  logGroupName: /aws/eks/skybook-eks/application
+  logStreamPrefix: skybook-
+  autoCreateGroup: false

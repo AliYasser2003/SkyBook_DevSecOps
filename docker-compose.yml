@@ -3,7 +3,6 @@ name: skybook
 services:
   db:
     image: mysql:8.4
-    container_name: flight-booking-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -25,7 +24,6 @@ services:
 
   backend:
     build: ./backend
-    container_name: flight-booking-backend
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -45,6 +43,9 @@ services:
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-mailpit}
       AWS_REGION: ${AWS_REGION:-}
       SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_FROM: "SkyBook <no-reply@skybook.local>"
@@ -71,7 +72,6 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: flight-booking-frontend
     restart: unless-stopped
     environment:
       VITE_API_URL: http://localhost:5000
@@ -83,7 +83,6 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: flight-booking-mailpit
     restart: unless-stopped
     ports:
       - "127.0.0.1:8025:8025"

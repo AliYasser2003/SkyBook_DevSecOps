@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skybook-db-migrations
+  namespace: skybook
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql-migrations
+          image: mysql:8.4
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              export MYSQL_PWD="${DB_PASSWORD}"
+
+              echo "Waiting for RDS..."
+              until mysqladmin ping \
+                -h "${DB_HOST}" \
+                -P "${DB_PORT}" \
+                -u "${DB_USER}" \
+                --silent; do
+                sleep 5
+              done
+
+              echo "Applying migration 001..."
+              mysql -h "${DB_HOST}" -P "${DB_PORT}" \
+                -u "${DB_USER}" "${DB_NAME}" \
+                < /migrations/001_booking_payment_foundation.sql
+
+              echo "Applying migration 003..."
+              mysql -h "${DB_HOST}" -P "${DB_PORT}" \
+                -u "${DB_USER}" "${DB_NAME}" \
+                < /migrations/003_flight_seats.sql
+
+              echo "Applying migration 004..."
+              mysql -h "${DB_HOST}" -P "${DB_PORT}" \
+                -u "${DB_USER}" "${DB_NAME}" \
+                < /migrations/004_payment_ledger_compatibility.sql
+
+              echo "All migrations completed successfully."
+
+          envFrom:
+            - secretRef:
+                name: skybook-backend-secrets
+
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+
+      volumes:
+        - name: migrations
+          configMap:
+            name: skybook-db-migrations
